@@ -1,37 +1,41 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
+import { AppRouterProvider, useAppRouter } from "@/hooks/useAppRouter";
 import { Navbar } from "@/components/Navbar";
 import Index from "./pages/Index";
 import BookPage from "./pages/BookPage";
 import MyBookings from "./pages/MyBookings";
 import AuthPage from "./pages/AuthPage";
-import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const NotFoundView = () => (
+  <div className="container flex min-h-[70vh] flex-col items-center justify-center gap-4 text-center">
+    <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">404</p>
+    <h1 className="font-display text-4xl font-semibold">Page not found</h1>
+    <p className="max-w-md text-muted-foreground">The page you’re looking for doesn’t exist.</p>
+  </div>
+);
+
+const AppContent = () => {
+  const { path } = useAppRouter();
+
+  let page = <NotFoundView />;
+
+  if (path === "/") page = <Index />;
+  if (path === "/book") page = <BookPage />;
+  if (path === "/my-bookings") page = <MyBookings />;
+  if (path === "/auth") page = <AuthPage />;
+
+  return (
+    <AuthProvider>
+      <Navbar />
+      {page}
+    </AuthProvider>
+  );
+};
 
 const App = () => (
-  <BrowserRouter>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <AuthProvider>
-          <Navbar />
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/book" element={<BookPage />} />
-            <Route path="/my-bookings" element={<MyBookings />} />
-            <Route path="/auth" element={<AuthPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
-  </BrowserRouter>
+  <AppRouterProvider>
+    <AppContent />
+  </AppRouterProvider>
 );
 
 export default App;

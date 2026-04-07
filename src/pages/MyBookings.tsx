@@ -1,98 +1,139 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { format, parseISO } from "date-fns";
+import { CalendarDays, Clock, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useAppRouter } from "@/hooks/useAppRouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Link } from "react-router-dom";
-import { CalendarDays, Clock, Plus } from "lucide-react";
-import { format, parseISO } from "date-fns";
-import { toast } from "sonner";
+
+type BookingWithService = {
+  id: string;
+  booking_date: string;
+  booking_time: string;
+  notes: string | null;
+  status: string;
+  services: {
+    name: string;
+    duration_minutes: number;
+    price: number;
+  } | null;
+};
 
 const statusVariant = (status: string) => {
   switch (status) {
-    case "confirmed": return "default" as const;
-    case "cancelled": return "destructive" as const;
-    case "completed": return "secondary" as const;
-    default: return "outline" as const;
+    case "confirmed":
+      return "default" as const;
+    case "cancelled":
+      return "destructive" as const;
+    case "completed":
+      return "secondary" as const;
+    default:
+      return "outline" as const;
   }
 };
 
 const MyBookings = () => {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
+  const { navigate } = useAppRouter();
+  const [bookings, setBookings] = useState<BookingWithService[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [cancellingId, setCancellingId] = useState("");
 
-  const { data: bookings, isLoading } = useQuery({
-    queryKey: ["bookings"],
-    enabled: !!user,
-    queryFn: async () => {
+  useEffect(() => {
+    let mounted = true;
+
+    const loadBookings = async () => {
+      if (!user) {
+        if (mounted) setIsLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("bookings")
-        .select("*, services(name, duration_minutes, price)")
+        .select("id, booking_date, booking_time, notes, status, services(name, duration_minutes, price)")
         .order("booking_date", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
 
-  const cancelMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("bookings").update({ status: "cancelled" }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bookings"] });
-      toast.success("Booking cancelled");
-    },
-    onError: () => toast.error("Failed to cancel"),
-  });
+      if (!mounted) return;
+
+      if (error) {
+        setErrorMessage(error.message);
+      } else {
+        setBookings((data as BookingWithService[]) ?? []);
+      }
+
+      setIsLoading(false);
+    };
+
+    void loadBookings();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
+
+  const cancelBooking = async (id: string) => {
+    setCancellingId(id);
+    setErrorMessage("");
+
+    const { error } = await supabase.from("bookings").update({ status: "cancelled" }).eq("id", id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      setCancellingId("");
+      return;
+    }
+
+    setBookings((current) => current.map((booking) => (booking.id === id ? { ...booking, status: "cancelled" } : booking)));
+    setCancellingId("");
+  };
 
   if (!user) {
     return (
       <div className="container flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
         <CalendarDays className="h-12 w-12 text-primary" />
         <h2 className="font-display text-2xl font-bold">Sign in to view bookings</h2>
-        <Link to="/auth"><Button>Sign In</Button></Link>
+        <Button onClick={() => navigate("/auth")}>Sign In</Button>
       </div>
     );
   }
 
   return (
     <div className="container py-12">
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold">My Bookings</h1>
           <p className="mt-2 text-muted-foreground">Manage your upcoming and past appointments.</p>
         </div>
-        <Link to="/book">
-          <Button><Plus className="mr-1 h-4 w-4" /> New Booking</Button>
-        </Link>
+        <Button onClick={() => navigate("/book")}><Plus className="mr-1 h-4 w-4" /> New Booking</Button>
       </div>
 
       {isLoading ? (
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => <div key={i} className="h-24 animate-pulse rounded-lg bg-muted" />)}
+          {[1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-lg bg-muted" />)}
         </div>
-      ) : !bookings?.length ? (
+      ) : !bookings.length ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-16 text-center">
             <CalendarDays className="h-12 w-12 text-muted-foreground" />
             <h3 className="font-display text-lg font-semibold">No bookings yet</h3>
             <p className="text-sm text-muted-foreground">Start by booking your first appointment.</p>
-            <Link to="/book"><Button>Book Now</Button></Link>
+            <Button onClick={() => navigate("/book")}>Book Now</Button>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
-          {bookings.map((booking, i) => (
-            <Card key={booking.id} className="animate-fade-in" style={{ animationDelay: `${i * 60}ms` }}>
+          {bookings.map((booking, index) => (
+            <Card key={booking.id} className="animate-fade-in" style={{ animationDelay: `${index * 60}ms` }}>
               <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-display font-semibold">{(booking as any).services?.name}</h3>
+                    <h3 className="font-display font-semibold">{booking.services?.name ?? "Service"}</h3>
                     <Badge variant={statusVariant(booking.status)}>{booking.status}</Badge>
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <CalendarDays className="h-3.5 w-3.5" />
                       {format(parseISO(booking.booking_date), "EEE, MMM d, yyyy")}
@@ -109,10 +150,10 @@ const MyBookings = () => {
                     variant="outline"
                     size="sm"
                     className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                    onClick={() => cancelMutation.mutate(booking.id)}
-                    disabled={cancelMutation.isPending}
+                    onClick={() => void cancelBooking(booking.id)}
+                    disabled={cancellingId === booking.id}
                   >
-                    Cancel
+                    {cancellingId === booking.id ? "Cancelling…" : "Cancel"}
                   </Button>
                 )}
               </CardContent>
@@ -120,6 +161,8 @@ const MyBookings = () => {
           ))}
         </div>
       )}
+
+      {errorMessage && <p className="mt-4 text-sm text-destructive">{errorMessage}</p>}
     </div>
   );
 };
