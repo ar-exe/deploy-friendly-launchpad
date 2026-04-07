@@ -14,7 +14,104 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bookings: {
+        Row: {
+          booking_date: string
+          booking_time: string
+          created_at: string
+          id: string
+          notes: string | null
+          service_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          booking_date: string
+          booking_time: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          service_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          booking_date?: string
+          booking_time?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          service_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      services: {
+        Row: {
+          created_at: string
+          description: string | null
+          duration_minutes: number
+          id: string
+          name: string
+          price: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          name: string
+          price?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          name?: string
+          price?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
