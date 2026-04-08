@@ -1,36 +1,19 @@
 import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { CalendarDays, Clock, Plus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiGetBookings, apiCancelBooking, type BookingWithService } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-type BookingWithService = {
-  id: string;
-  booking_date: string;
-  booking_time: string;
-  notes: string | null;
-  status: string;
-  services: {
-    name: string;
-    duration_minutes: number;
-    price: number;
-  } | null;
-};
-
 const statusVariant = (status: string) => {
   switch (status) {
-    case "confirmed":
-      return "default" as const;
-    case "cancelled":
-      return "destructive" as const;
-    case "completed":
-      return "secondary" as const;
-    default:
-      return "outline" as const;
+    case "confirmed": return "default" as const;
+    case "cancelled": return "destructive" as const;
+    case "completed": return "secondary" as const;
+    default: return "outline" as const;
   }
 };
 
@@ -44,50 +27,27 @@ const MyBookings = () => {
 
   useEffect(() => {
     let mounted = true;
+    if (!user) { setIsLoading(false); return; }
 
-    const loadBookings = async () => {
-      if (!user) {
-        if (mounted) setIsLoading(false);
-        return;
-      }
+    apiGetBookings()
+      .then((data) => { if (mounted) setBookings(data); })
+      .catch((err) => { if (mounted) setErrorMessage(err.message); })
+      .finally(() => { if (mounted) setIsLoading(false); });
 
-      const { data, error } = await supabase
-        .from("bookings")
-        .select("id, booking_date, booking_time, notes, status, services(name, duration_minutes, price)")
-        .order("booking_date", { ascending: false });
-
-      if (!mounted) return;
-
-      if (error) {
-        setErrorMessage(error.message);
-      } else {
-        setBookings((data as BookingWithService[]) ?? []);
-      }
-
-      setIsLoading(false);
-    };
-
-    void loadBookings();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [user]);
 
   const cancelBooking = async (id: string) => {
     setCancellingId(id);
     setErrorMessage("");
-
-    const { error } = await supabase.from("bookings").update({ status: "cancelled" }).eq("id", id);
-
-    if (error) {
-      setErrorMessage(error.message);
+    try {
+      await apiCancelBooking(id);
+      setBookings((cur) => cur.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b)));
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Cancel failed");
+    } finally {
       setCancellingId("");
-      return;
     }
-
-    setBookings((current) => current.map((booking) => (booking.id === id ? { ...booking, status: "cancelled" } : booking)));
-    setCancellingId("");
   };
 
   if (!user) {
@@ -111,9 +71,7 @@ const MyBookings = () => {
       </div>
 
       {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-lg bg-muted" />)}
-        </div>
+        <div className="space-y-4">{[1, 2, 3].map((i) => <div key={i} className="h-24 animate-pulse rounded-lg bg-muted" />)}</div>
       ) : !bookings.length ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-16 text-center">
@@ -134,25 +92,13 @@ const MyBookings = () => {
                     <Badge variant={statusVariant(booking.status)}>{booking.status}</Badge>
                   </div>
                   <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <CalendarDays className="h-3.5 w-3.5" />
-                      {format(parseISO(booking.booking_date), "EEE, MMM d, yyyy")}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
-                      {booking.booking_time.slice(0, 5)}
-                    </span>
+                    <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{format(parseISO(booking.booking_date), "EEE, MMM d, yyyy")}</span>
+                    <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{booking.booking_time.slice(0, 5)}</span>
                   </div>
                   {booking.notes && <p className="text-sm text-muted-foreground">{booking.notes}</p>}
                 </div>
                 {booking.status === "confirmed" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                    onClick={() => void cancelBooking(booking.id)}
-                    disabled={cancellingId === booking.id}
-                  >
+                  <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => void cancelBooking(booking.id)} disabled={cancellingId === booking.id}>
                     {cancellingId === booking.id ? "Cancelling…" : "Cancel"}
                   </Button>
                 )}
@@ -161,7 +107,6 @@ const MyBookings = () => {
           ))}
         </div>
       )}
-
       {errorMessage && <p className="mt-4 text-sm text-destructive">{errorMessage}</p>}
     </div>
   );
