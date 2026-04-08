@@ -1,30 +1,22 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, CalendarDays, Clock, Shield } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiGetServices, type Service } from "@/lib/api";
 import { ServiceCard } from "@/components/ServiceCard";
 import { Button } from "@/components/ui/button";
 import { useAppRouter } from "@/hooks/useAppRouter";
-import type { Tables } from "@/integrations/supabase/types";
 
 const Index = () => {
   const { navigate } = useAppRouter();
-  const [services, setServices] = useState<Tables<"services">[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-
-    const loadServices = async () => {
-      const { data } = await supabase.from("services").select("*").order("price", { ascending: true });
-      if (mounted && data) setServices(data);
-      if (mounted) setIsLoading(false);
-    };
-
-    void loadServices();
-
-    return () => {
-      mounted = false;
-    };
+    apiGetServices()
+      .then((data) => { if (mounted) setServices(data); })
+      .catch(() => {})
+      .finally(() => { if (mounted) setIsLoading(false); });
+    return () => { mounted = false; };
   }, []);
 
   return (

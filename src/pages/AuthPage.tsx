@@ -31,11 +31,11 @@ const AuthPage = () => {
     try {
       if (isSignUp) {
         await signUp(email, password, fullName);
-        setMessage("Account created. You can sign in right away.");
+        setMessage("Account created! You're now signed in.");
       } else {
         await signIn(email, password);
-        navigate("/", { replace: true });
       }
+      navigate("/", { replace: true });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Authentication failed.");
     } finally {
@@ -55,16 +55,16 @@ const AuthPage = () => {
             {isSignUp && (
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
-                <Input id="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
+                <Input id="name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
               </div>
             )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
             </div>
             {message && <p className="text-sm text-success">{message}</p>}
             {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
@@ -73,8 +73,8 @@ const AuthPage = () => {
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            {isSignUp ? "Already have an account?" : "Don&apos;t have an account?"}{" "}
-            <button type="button" onClick={() => setIsSignUp((value) => !value)} className="font-medium text-primary hover:underline">
+            {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+            <button type="button" onClick={() => setIsSignUp((v) => !v)} className="font-medium text-primary hover:underline">
               {isSignUp ? "Sign In" : "Sign Up"}
             </button>
           </p>

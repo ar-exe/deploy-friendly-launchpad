@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { CalendarDays, CheckCircle, Clock } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiGetServices, apiCreateBooking, type Service } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import type { Tables } from "@/integrations/supabase/types";
 
 const TIME_SLOTS = [
   "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
@@ -18,7 +17,7 @@ const TIME_SLOTS = [
 const BookPage = () => {
   const { user } = useAuth();
   const { navigate, search } = useAppRouter();
-  const [services, setServices] = useState<Tables<"services">[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
   const [selectedService, setSelectedService] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
@@ -34,22 +33,12 @@ const BookPage = () => {
     const serviceFromUrl = params.get("service");
     if (serviceFromUrl) setSelectedService(serviceFromUrl);
 
-    const loadServices = async () => {
-      const { data, error } = await supabase.from("services").select("*").order("name");
-      if (!mounted) return;
-      if (error) {
-        setErrorMessage(error.message);
-      } else {
-        setServices(data ?? []);
-      }
-      setServicesLoading(false);
-    };
+    apiGetServices()
+      .then((data) => { if (mounted) setServices(data); })
+      .catch((err) => { if (mounted) setErrorMessage(err.message); })
+      .finally(() => { if (mounted) setServicesLoading(false); });
 
-    void loadServices();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [search]);
 
   const selectedServiceDetails = useMemo(
@@ -64,22 +53,19 @@ const BookPage = () => {
     setSubmitting(true);
     setErrorMessage("");
 
-    const { error } = await supabase.from("bookings").insert({
-      user_id: user.id,
-      service_id: selectedService,
-      booking_date: selectedDate,
-      booking_time: `${selectedTime}:00`,
-      notes: notes.trim() || null,
-    });
-
-    setSubmitting(false);
-
-    if (error) {
-      setErrorMessage(error.message);
-      return;
+    try {
+      await apiCreateBooking({
+        service_id: selectedService,
+        booking_date: selectedDate,
+        booking_time: `${selectedTime}:00`,
+        notes: notes.trim() || null,
+      });
+      setBooked(true);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Booking failed");
+    } finally {
+      setSubmitting(false);
     }
-
-    setBooked(true);
   };
 
   if (!user) {
@@ -103,14 +89,7 @@ const BookPage = () => {
         </p>
         <div className="mt-4 flex gap-3">
           <Button onClick={() => navigate("/my-bookings")}>View My Bookings</Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setBooked(false);
-              setSelectedTime("");
-              setNotes("");
-            }}
-          >
+          <Button variant="outline" onClick={() => { setBooked(false); setSelectedTime(""); setNotes(""); }}>
             Book Another
           </Button>
         </div>
@@ -127,75 +106,40 @@ const BookPage = () => {
 
       <div className="grid gap-8 lg:grid-cols-3">
         <Card>
-          <CardHeader>
-            <CardTitle className="font-body text-base">1. Choose Service</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="font-body text-base">1. Choose Service</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <select
-              value={selectedService}
-              onChange={(event) => setSelectedService(event.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
+            <select value={selectedService} onChange={(e) => setSelectedService(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
               <option value="">Select a service</option>
-              {services.map((service) => (
-                <option key={service.id} value={service.id}>
-                  {service.name} — {Number(service.price) === 0 ? "Free" : `$${Number(service.price)}`}
-                </option>
+              {services.map((s) => (
+                <option key={s.id} value={s.id}>{s.name} — {Number(s.price) === 0 ? "Free" : `$${Number(s.price)}`}</option>
               ))}
             </select>
             {selectedServiceDetails && (
-              <p className="text-sm text-muted-foreground">
-                <Clock className="mr-1 inline h-3.5 w-3.5" />
-                {selectedServiceDetails.duration_minutes} minutes
-              </p>
+              <p className="text-sm text-muted-foreground"><Clock className="mr-1 inline h-3.5 w-3.5" />{selectedServiceDetails.duration_minutes} minutes</p>
             )}
             {servicesLoading && <p className="text-sm text-muted-foreground">Loading services…</p>}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="font-body text-base">2. Pick a Date</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="font-body text-base">2. Pick a Date</CardTitle></CardHeader>
           <CardContent>
-            <input
-              type="date"
-              value={selectedDate}
-              min={new Date().toISOString().split("T")[0]}
-              onChange={(event) => setSelectedDate(event.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            />
+            <input type="date" value={selectedDate} min={new Date().toISOString().split("T")[0]} onChange={(e) => setSelectedDate(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
             <p className="mt-3 text-sm text-muted-foreground">Bookings are available from today onward.</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="font-body text-base">3. Choose Time</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="font-body text-base">3. Choose Time</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-2">
               {TIME_SLOTS.map((time) => (
-                <button
-                  key={time}
-                  onClick={() => setSelectedTime(time)}
-                  className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-                    selectedTime === time
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-card text-foreground hover:border-primary/50"
-                  }`}
-                >
+                <button key={time} onClick={() => setSelectedTime(time)} className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${selectedTime === time ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground hover:border-primary/50"}`}>
                   {time}
                 </button>
               ))}
             </div>
-            <Textarea
-              placeholder="Any notes? (optional)"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              className="resize-none"
-              rows={3}
-            />
+            <Textarea placeholder="Any notes? (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} className="resize-none" rows={3} />
             {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
             <Button className="w-full" size="lg" disabled={!isComplete || submitting} onClick={() => void handleBooking()}>
               {submitting ? "Booking…" : "Confirm Booking"}
